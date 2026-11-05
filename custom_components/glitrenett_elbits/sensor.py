@@ -46,12 +46,7 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
         super().__init__(coordinator)
         self._sensor = sensor
         self._attr_unique_id = f"{entry.entry_id}_{sensor}"
-        self._attr_name = {
-            "current_grid_price": "Current energy grid price",
-            "three_hour_average": "Top three hours average consumption",
-            "energy_level_price": "Current energy level price",
-            "energy_level": "Current energy level",
-        }[sensor]
+        self._attr_translation_key = sensor
         self._attr_icon = (
             "mdi:transmission-tower"
             if sensor == "current_grid_price"

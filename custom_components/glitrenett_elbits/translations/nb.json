@@ -27,5 +27,21 @@
       "already_configured": "Dette målepunktet er allerede konfigurert.",
       "reauth_successful": "Glitrenett Elbits er autentisert på nytt."
     }
+  },
+  "entity": {
+    "sensor": {
+      "current_grid_price": {
+        "name": "Gjeldende nettleiepris"
+      },
+      "three_hour_average": {
+        "name": "Snitt av 3 topptimer"
+      },
+      "energy_level_price": {
+        "name": "Gjeldende pris for energinivå"
+      },
+      "energy_level": {
+        "name": "Gjeldende energinivå"
+      }
+    }
   }
 }
