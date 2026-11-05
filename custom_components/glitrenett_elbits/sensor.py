@@ -142,6 +142,29 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
         value = level.get("levelInfo")
         return value if isinstance(value, str) else None
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return all energy level thresholds and prices."""
+        if self._sensor != "energy_level":
+            return None
+        collection = self._collection()
+        if collection is None:
+            return None
+        levels = self._price_levels(collection)
+        if not levels:
+            return None
+        return {
+            "energy_levels": [
+                {
+                    "name": level.get("levelInfo"),
+                    "min": level.get("valueMin"),
+                    "max": level.get("valueMax"),
+                    "price": level.get("monthlyTotal"),
+                }
+                for level in levels
+            ]
+        }
+
     def _collection(self) -> dict[str, Any] | None:
         collections = self.coordinator.data.get("gridTariffCollections")
         if not isinstance(collections, list) or not collections:
@@ -197,47 +220,57 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
                     return value
         return None
 
+    @staticmethod
+    def _price_levels(collection: dict[str, Any]) -> list[dict[str, Any]]:
+        """Return all price levels from the current tariff."""
+        grid_tariff = collection.get("gridTariff")
+        tariff_price = (
+            grid_tariff.get("tariffPrice") if isinstance(grid_tariff, dict) else None
+        )
+        price_info = (
+            tariff_price.get("priceInfo")
+            if isinstance(tariff_price, dict)
+            else None
+        )
+        fixed_prices = (
+            price_info.get("fixedPrices") if isinstance(price_info, dict) else None
+        )
+        if not isinstance(fixed_prices, list):
+            return []
+
+        levels: list[dict[str, Any]] = []
+        for fixed_price in fixed_prices:
+            if not isinstance(fixed_price, dict):
+                continue
+            price_levels = fixed_price.get("priceLevels")
+            if not isinstance(price_levels, list):
+                continue
+            levels.extend(
+                level for level in price_levels if isinstance(level, dict)
+            )
+        return levels
+
     def _current_energy_level(
         self, collection: dict[str, Any]
     ) -> dict[str, Any] | None:
         consumption = self._three_hour_average(collection)
         if consumption is None:
             return None
-        grid_tariff = collection.get("gridTariff")
-        tariff_price = (
-            grid_tariff.get("tariffPrice") if isinstance(grid_tariff, dict) else None
-        )
-        fixed_prices = (
-            tariff_price.get("priceInfo", {}).get("fixedPrices")
-            if isinstance(tariff_price, dict)
-            and isinstance(tariff_price.get("priceInfo"), dict)
-            else None
-        )
-        if not isinstance(fixed_prices, list):
-            return None
 
-        for fixed_price in fixed_prices:
-            if not isinstance(fixed_price, dict):
+        for level in self._price_levels(collection):
+            try:
+                value_min = (
+                    float(level["valueMin"])
+                    if level.get("valueMin") is not None
+                    else -inf
+                )
+                value_max = (
+                    float(level["valueMax"])
+                    if level.get("valueMax") is not None
+                    else inf
+                )
+            except (TypeError, ValueError):
                 continue
-            levels = fixed_price.get("priceLevels")
-            if not isinstance(levels, list):
-                continue
-            for level in levels:
-                if not isinstance(level, dict):
-                    continue
-                try:
-                    value_min = (
-                        float(level["valueMin"])
-                        if level.get("valueMin") is not None
-                        else -inf
-                    )
-                    value_max = (
-                        float(level["valueMax"])
-                        if level.get("valueMax") is not None
-                        else inf
-                    )
-                except (TypeError, ValueError):
-                    continue
-                if value_min < consumption < value_max:
-                    return level
+            if value_min < consumption < value_max:
+                return level
         return None
