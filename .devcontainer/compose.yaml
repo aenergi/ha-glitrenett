@@ -1,0 +1,10 @@
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    volumes:
+      - ./config:/config
+      - ../custom_components/glitrenett_elbits:/config/custom_components/glitrenett_elbits:ro
+    ports:
+      - "8123:8123"
+    environment:
+      TZ: Etc/UTC
