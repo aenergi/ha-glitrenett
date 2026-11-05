@@ -2,6 +2,7 @@ services:
   homeassistant:
     image: ghcr.io/home-assistant/home-assistant:stable
     volumes:
+      - ..:/workspaces/glitrenett_elbits
       - ./config:/config
       - ../custom_components/glitrenett_elbits:/config/custom_components/glitrenett_elbits:ro
     ports:
