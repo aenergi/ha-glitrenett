@@ -7,6 +7,12 @@
       "request": "launch",
       "module": "homeassistant",
       "args": ["--config", "/config"],
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}/custom_components/glitrenett_elbits",
+          "remoteRoot": "/config/custom_components/glitrenett_elbits"
+        }
+      ],
       "python": "${command:python.interpreterPath}",
       "console": "integratedTerminal",
       "justMyCode": false,
