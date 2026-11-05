@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Glitrenett Elbits",
+        "description": "Enter the API key issued for Glitrenett and your metering point ID.",
+        "data": {
+          "api_key": "API key",
+          "metering_point_id": "Metering point ID"
+        }
+      }
+    },
+    "error": {
+      "invalid_input": "Both fields are required."
+    },
+    "abort": {
+      "already_configured": "This metering point is already configured."
+    }
+  }
+}
