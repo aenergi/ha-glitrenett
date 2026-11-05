@@ -26,9 +26,9 @@ After restarting Home Assistant, add **Glitrenett Elbits** from
 **Settings > Devices & services > Add integration**. Enter the API key issued
 for the Glitrenett API and the metering point ID associated with your account.
 The integration checks these values with the API during setup.
-The integration creates a **Grid tariff** sensor with the returned tariff data
-as attributes. It requests today's tariffs and refreshes no more often than
-once per hour.
+The integration creates sensors for the current grid price, the top-three-hours
+average consumption, and the current energy level and its price. It requests
+today's tariffs and refreshes no more often than once per hour.
 
 The API key is sent to `https://api.aenergi.no/Glitrenett/gridtariff/api/1`
 using the `X-API-Key` header. The API provider recommends limiting requests to
