@@ -1,8 +1,9 @@
 """Data update coordinator for Glitrenett Elbits."""
 
 import asyncio
-import hashlib
+import hmac
 import logging
+import secrets
 import time
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -47,7 +48,8 @@ class _RequestState:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     last_request: float | None = None
     data: dict[str, Any] | None = None
-    api_key_fingerprint: str | None = None
+    api_key_fingerprint: bytes | None = None
+    fingerprint_secret: bytes = field(default_factory=lambda: secrets.token_bytes(32))
 
 
 def _get_request_state(hass: HomeAssistant, metering_point_id: str) -> _RequestState:
@@ -61,7 +63,9 @@ async def async_get_tariffs(
 ) -> dict[str, Any]:
     """Fetch tariffs while enforcing the per-metering-point hourly request limit."""
     state = _get_request_state(hass, metering_point_id)
-    api_key_fingerprint = hashlib.sha256(api_key.encode()).hexdigest()
+    api_key_fingerprint = hmac.digest(
+        state.fingerprint_secret, api_key.encode(), "sha256"
+    )
     async with state.lock:
         now = time.monotonic()
         if (
