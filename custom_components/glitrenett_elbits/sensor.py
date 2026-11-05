@@ -1,15 +1,17 @@
 """Sensors for Glitrenett Elbits."""
 
+from datetime import datetime
 from math import inf
-from typing import Any
+from typing import Any, Callable
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import dt as dt_util
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from . import DOMAIN
 from .coordinator import GlitrenettCoordinator
@@ -59,6 +61,70 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
             self._attr_native_unit_of_measurement = "NOK/kWh"
         elif sensor == "three_hour_average":
             self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+        self._cancel_tariff_change: Callable[[], None] | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Set up tariff boundary updates."""
+        await super().async_added_to_hass()
+        self.async_on_remove(self._cancel_scheduled_tariff_change)
+        self._schedule_next_tariff_change()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        super()._handle_coordinator_update()
+        self._schedule_next_tariff_change()
+
+    @callback
+    def _handle_tariff_change(self, _: datetime) -> None:
+        """Update the current price when a tariff period expires."""
+        self._cancel_tariff_change = None
+        self.async_write_ha_state()
+        self._schedule_next_tariff_change()
+
+    @callback
+    def _schedule_next_tariff_change(self) -> None:
+        """Schedule an update for the next tariff period expiration."""
+        self._cancel_scheduled_tariff_change()
+        if self._sensor != "current_grid_price":
+            return
+
+        collection = self._collection()
+        if collection is None:
+            return
+        grid_tariff = collection.get("gridTariff")
+        tariff_price = (
+            grid_tariff.get("tariffPrice") if isinstance(grid_tariff, dict) else None
+        )
+        hours = tariff_price.get("hours") if isinstance(tariff_price, dict) else None
+        if not isinstance(hours, list):
+            return
+
+        now = dt_util.utcnow()
+        next_expiration: datetime | None = None
+        for hour in hours:
+            if not isinstance(hour, dict):
+                continue
+            expiration = dt_util.parse_datetime(hour.get("expiredAt"))
+            if expiration is None:
+                continue
+            expiration = dt_util.as_utc(expiration)
+            if expiration <= now or (
+                next_expiration is not None and expiration >= next_expiration
+            ):
+                continue
+            next_expiration = expiration
+
+        if next_expiration is not None:
+            self._cancel_tariff_change = async_track_point_in_time(
+                self.hass, self._handle_tariff_change, next_expiration
+            )
+
+    def _cancel_scheduled_tariff_change(self) -> None:
+        """Cancel the scheduled tariff boundary update."""
+        if self._cancel_tariff_change is not None:
+            self._cancel_tariff_change()
+            self._cancel_tariff_change = None
 
     @property
     def native_value(self) -> str | float | None:
@@ -119,19 +185,22 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
     @staticmethod
     def _three_hour_average(collection: dict[str, Any]) -> float | None:
         metering_data = collection.get("meteringPointsAndPriceLevels")
-        points = (
-            metering_data.get("meteringPoints")
-            if isinstance(metering_data, dict)
-            else None
-        )
-        if (
-            not isinstance(points, list)
-            or not points
-            or not isinstance(points[0], dict)
-        ):
+        if not isinstance(metering_data, list):
             return None
-        value = points[0].get("levelValue")
-        return value if isinstance(value, (int, float)) else None
+
+        for metering_data_entry in metering_data:
+            if not isinstance(metering_data_entry, dict):
+                continue
+            points = metering_data_entry.get("meteringPoints")
+            if not isinstance(points, list):
+                continue
+            for point in points:
+                if not isinstance(point, dict):
+                    continue
+                value = point.get("levelValue")
+                if isinstance(value, (int, float)):
+                    return value
+        return None
 
     def _current_energy_level(
         self, collection: dict[str, Any]
@@ -139,34 +208,41 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
         consumption = self._three_hour_average(collection)
         if consumption is None:
             return None
-        price_info = collection.get("priceInfo")
-        fixed_prices = (
-            price_info.get("fixedPrices") if isinstance(price_info, dict) else None
+        grid_tariff = collection.get("gridTariff")
+        tariff_price = (
+            grid_tariff.get("tariffPrice") if isinstance(grid_tariff, dict) else None
         )
-        levels = (
-            fixed_prices.get("priceLevels")
-            if isinstance(fixed_prices, dict)
+        fixed_prices = (
+            tariff_price.get("priceInfo", {}).get("fixedPrices")
+            if isinstance(tariff_price, dict)
+            and isinstance(tariff_price.get("priceInfo"), dict)
             else None
         )
-        if not isinstance(levels, list):
+        if not isinstance(fixed_prices, list):
             return None
 
-        for level in levels:
-            if not isinstance(level, dict):
+        for fixed_price in fixed_prices:
+            if not isinstance(fixed_price, dict):
                 continue
-            try:
-                value_min = (
-                    float(level["valueMin"])
-                    if level.get("valueMin") is not None
-                    else -inf
-                )
-                value_max = (
-                    float(level["valueMax"])
-                    if level.get("valueMax") is not None
-                    else inf
-                )
-            except (TypeError, ValueError):
+            levels = fixed_price.get("priceLevels")
+            if not isinstance(levels, list):
                 continue
-            if value_min < consumption < value_max:
-                return level
+            for level in levels:
+                if not isinstance(level, dict):
+                    continue
+                try:
+                    value_min = (
+                        float(level["valueMin"])
+                        if level.get("valueMin") is not None
+                        else -inf
+                    )
+                    value_max = (
+                        float(level["valueMax"])
+                        if level.get("valueMax") is not None
+                        else inf
+                    )
+                except (TypeError, ValueError):
+                    continue
+                if value_min < consumption < value_max:
+                    return level
         return None
