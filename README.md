@@ -41,14 +41,16 @@ Home Assistant's hassfest on pushes, pull requests, manual runs, and daily.
 
 ## Development
 
-The repository includes a VS Code Dev Container that runs Home Assistant with
-the integration mounted directly from the workspace. Install Docker and the
-VS Code Dev Containers extension, open the repository in VS Code, and choose
-**Reopen in Container**. Home Assistant is available at
-`http://localhost:8123`; complete onboarding and add **Glitrenett Elbits** from
-**Settings > Devices & services > Add integration**. The development config
-enables debug logging for this integration. Changes to its files are visible
-inside Home Assistant; restart Home Assistant to load code changes.
+The repository includes a VS Code Dev Container for debugging Home Assistant
+with the integration mounted directly from the workspace. Install Docker and
+the VS Code Dev Containers extension, open the repository in VS Code, and
+choose **Reopen in Container**. Select the **Home Assistant** launch
+configuration and press **F5** to start Home Assistant under the debugger.
+Home Assistant is available at `http://localhost:8123`; complete onboarding
+and add **Glitrenett Elbits** from **Settings > Devices & services > Add
+integration**. The development config enables debug logging for this
+integration. Changes to its files are visible inside Home Assistant; restart
+the debug session to load code changes.
 
 ## Support and license
 

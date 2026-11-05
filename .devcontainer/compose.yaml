@@ -1,6 +1,8 @@
 services:
   homeassistant:
-    image: ghcr.io/home-assistant/home-assistant:stable
+    build:
+      context: .
+      dockerfile: Dockerfile
     volumes:
       - ..:/workspaces/glitrenett_elbits
       - ./config:/config
@@ -9,3 +11,4 @@ services:
       - "8123:8123"
     environment:
       TZ: Etc/UTC
+    command: ["sleep", "infinity"]
