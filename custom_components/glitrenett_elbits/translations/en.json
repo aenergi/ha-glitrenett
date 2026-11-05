@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Glitrenett Elbits",
+        "description": "Enter the API key issued for Glitrenett and your metering point ID.",
+        "data": {
+          "api_key": "API key",
+          "metering_point_id": "Metering point ID"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Glitrenett Elbits",
+        "description": "Enter a valid API key for your metering point.",
+        "data": {
+          "api_key": "API key"
+        }
+      }
+    },
+    "error": {
+      "invalid_input": "Enter both values and ensure the API accepts the credentials and metering point ID.",
+      "invalid_auth": "The API key was rejected.",
+      "cannot_connect": "Unable to connect to the Glitrenett API.",
+      "request_throttled": "A request was recently made. Try again after the hourly limit resets."
+    },
+    "abort": {
+      "already_configured": "This metering point is already configured.",
+      "reauth_successful": "Glitrenett Elbits has been reauthenticated."
+    }
+  }
+}

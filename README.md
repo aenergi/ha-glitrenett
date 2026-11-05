@@ -3,12 +3,6 @@
 Custom Home Assistant integration for Glitrenett's implementation of the Elbits API
 in Norway.
 
-## Status
-
-This repository is a development skeleton only. It can be installed and loaded,
-but does not contact the API or create any entities yet. Credentials and UI
-configuration are not implemented.
-
 ## Installation
 
 ### HACS
@@ -28,20 +22,22 @@ This is a custom repository, not a listing in HACS's default catalog.
 
 ## Configuration
 
-Add the following to Home Assistant's `configuration.yaml`, then restart:
+After restarting Home Assistant, add **Glitrenett Elbits** from
+**Settings > Devices & services > Add integration**. Enter the API key issued
+for the Glitrenett API and the metering point ID associated with your account.
+The integration checks these values with the API during setup.
+The integration creates a **Grid tariff** sensor with the returned tariff data
+as attributes. It requests today's tariffs and refreshes no more often than
+once per hour.
 
-```yaml
-glitrenett_elbits:
-```
-
-No options are supported yet. There is no **Add integration** UI flow.
-To disable the integration, remove the YAML entry and restart Home Assistant.
+The API key is sent to `https://api.aenergi.no/Glitrenett/gridtariff/api/1`
+using the `X-API-Key` header. The API provider recommends limiting requests to
+once per day; the integration's hourly interval is the maximum polling rate.
 
 ## Validation
 
 The GitHub Actions validation workflow runs HACS repository validation and
 Home Assistant's hassfest on pushes, pull requests, manual runs, and daily.
-There are no runtime dependencies or project-specific tests yet.
 
 ## Support and license
 
