@@ -10,6 +10,11 @@
       "onAutoForward": "notify"
     }
   },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python"]
+    }
+  },
   "overrideCommand": false,
   "shutdownAction": "stopCompose"
 }
