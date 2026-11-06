@@ -1,11 +1,11 @@
 {
   "domain": "glitrenett_elbits",
-  "name": "Glitrenett Elbits",
+  "name": "Glitrenett",
   "codeowners": ["@epaulsen"],
   "config_flow": true,
-  "documentation": "https://github.com/epaulsen/ha-glitrenett-elbits",
+  "documentation": "https://github.com/epaulsen/ha-glitrenett",
   "integration_type": "service",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/epaulsen/ha-glitrenett-elbits/issues",
+  "issue_tracker": "https://github.com/epaulsen/ha-glitrenett/issues",
   "version": "0.0.1"
 }

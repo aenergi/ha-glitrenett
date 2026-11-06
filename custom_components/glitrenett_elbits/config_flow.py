@@ -1,4 +1,4 @@
-"""Config flow for Glitrenett Elbits."""
+"""Config flow for Glitrenett."""
 
 import voluptuous as vol
 
@@ -13,7 +13,7 @@ from .coordinator import APIError, RequestThrottled, async_get_tariffs
 
 
 class GlitrenettConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Glitrenett Elbits."""
+    """Handle a config flow for Glitrenett."""
 
     VERSION = 1
 
@@ -54,7 +54,7 @@ class GlitrenettConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors={"base": "cannot_connect"},
                 )
             return self.async_create_entry(
-                title="Glitrenett Elbits",
+                title="Glitrenett",
                 data={
                     CONF_API_KEY: api_key,
                     CONF_METERING_POINT_ID: metering_point_id,

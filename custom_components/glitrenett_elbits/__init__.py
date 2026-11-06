@@ -1,4 +1,4 @@
-"""Glitrenett Elbits integration."""
+"""Glitrenett integration."""
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
@@ -9,7 +9,7 @@ PLATFORMS = (Platform.SENSOR,)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Glitrenett Elbits from a config entry."""
+    """Set up Glitrenett from a config entry."""
     from .coordinator import GlitrenettCoordinator
 
     coordinator = GlitrenettCoordinator(hass, entry)
@@ -20,7 +20,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a Glitrenett Elbits config entry."""
+    """Unload a Glitrenett config entry."""
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
     hass.data[DOMAIN].pop(entry.entry_id)

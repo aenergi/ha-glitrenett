@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to Glitrenett Elbits",
+        "title": "Connect to Glitrenett",
         "description": "Enter the API key issued for Glitrenett and your metering point ID.",
         "data": {
           "api_key": "API key",
@@ -10,7 +10,7 @@
         }
       },
       "reauth_confirm": {
-        "title": "Reauthenticate Glitrenett Elbits",
+        "title": "Reauthenticate Glitrenett",
         "description": "Enter a valid API key for your metering point.",
         "data": {
           "api_key": "API key"
@@ -25,7 +25,7 @@
     },
     "abort": {
       "already_configured": "This metering point is already configured.",
-      "reauth_successful": "Glitrenett Elbits has been reauthenticated."
+      "reauth_successful": "Glitrenett has been reauthenticated."
     }
   },
   "entity": {

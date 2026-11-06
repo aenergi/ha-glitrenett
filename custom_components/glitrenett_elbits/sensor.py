@@ -1,4 +1,4 @@
-"""Sensors for Glitrenett Elbits."""
+"""Sensors for Glitrenett."""
 
 from datetime import datetime
 from math import inf
