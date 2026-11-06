@@ -27,5 +27,21 @@
       "already_configured": "This metering point is already configured.",
       "reauth_successful": "Glitrenett Elbits has been reauthenticated."
     }
+  },
+  "entity": {
+    "sensor": {
+      "current_grid_price": {
+        "name": "Current energy grid price"
+      },
+      "three_hour_average": {
+        "name": "Average of 3 peak hours"
+      },
+      "energy_level_price": {
+        "name": "Current energy level price"
+      },
+      "energy_level": {
+        "name": "Current energy level"
+      }
+    }
   }
 }

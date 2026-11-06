@@ -2,11 +2,13 @@
 
 import asyncio
 import hmac
+import json
 import logging
 import secrets
 import time
 from dataclasses import dataclass, field
 from datetime import timedelta
+from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -20,6 +22,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.util import dt as dt_util
 
 from . import DOMAIN
 from .const import CONF_METERING_POINT_ID
@@ -27,6 +30,8 @@ from .const import CONF_METERING_POINT_ID
 BASE_URL = "https://api.aenergi.no/Glitrenett/gridtariff/api/1"
 UPDATE_INTERVAL = timedelta(hours=1)
 _REQUEST_STATE_KEY = f"{DOMAIN}_request_states"
+_LOGGER = logging.getLogger(__name__)
+_RESPONSE_FILE = Path(__file__).parents[2] / "controller_response.json"
 
 
 class APIError(Exception):
@@ -79,13 +84,17 @@ async def async_get_tariffs(
                 return state.data
             raise RequestThrottled
 
-        state.last_request = now
         try:
+            start_of_current_day = dt_util.start_of_local_day()
+            end_of_next_day = start_of_current_day + timedelta(days=2) - timedelta(
+                seconds=1
+            )
             async with async_get_clientsession(hass).post(
                 f"{BASE_URL}/tariffquery/meteringpointsgridtariffs",
                 headers={"X-API-Key": api_key},
                 json={
-                    "range": "today",
+                    "startTime": start_of_current_day.isoformat(timespec="seconds"),
+                    "endTime": end_of_next_day.isoformat(timespec="seconds"),
                     "meteringPointIds": [metering_point_id],
                 },
                 timeout=aiohttp.ClientTimeout(total=10),
@@ -100,12 +109,28 @@ async def async_get_tariffs(
                         raise UpdateFailed(
                             "Received not-modified without a cached tariff response"
                         )
+                    state.last_request = time.monotonic()
                     return state.data
                 if response.status == 204:
                     data = {"gridTariffCollections": []}
                 else:
                     response.raise_for_status()
                     data = await response.json()
+                response_json = json.dumps(data, ensure_ascii=False, indent=2)
+                try:
+                    _RESPONSE_FILE.write_text(
+                        f"{response_json}\n",
+                        encoding="utf-8",
+                    )
+                except OSError:
+                    _LOGGER.exception(
+                        "Could not write controller response to %s",
+                        _RESPONSE_FILE,
+                    )
+                _LOGGER.debug(
+                    "Glitrenett API response: %s",
+                    response_json,
+                )
         except APIError:
             raise
         except (aiohttp.ClientError, TimeoutError) as err:
@@ -125,6 +150,7 @@ async def async_get_tariffs(
         data["gridTariffCollections"] = collections
         state.data = data
         state.api_key_fingerprint = api_key_fingerprint
+        state.last_request = time.monotonic()
         return data
 
 
@@ -135,7 +161,7 @@ class GlitrenettCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Initialize the coordinator."""
         super().__init__(
             hass,
-            logger=logging.getLogger(__name__),
+            logger=_LOGGER,
             name=DOMAIN,
             update_interval=UPDATE_INTERVAL,
         )
