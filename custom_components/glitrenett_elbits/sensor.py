@@ -286,6 +286,6 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
                 )
             except (TypeError, ValueError):
                 continue
-            if value_min < consumption < value_max:
+            if value_min <= consumption < value_max:
                 return level
         return None
