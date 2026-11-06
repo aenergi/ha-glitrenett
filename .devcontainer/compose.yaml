@@ -4,9 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - ..:/workspaces/glitrenett_elbits
+      - ..:/workspaces/glitrenett
       - ./config:/config
-      - ../custom_components/glitrenett_elbits:/config/custom_components/glitrenett_elbits:ro
+      - ../custom_components/glitrenett:/config/custom_components/glitrenett:ro
     ports:
       - "8123:8123"
     environment:

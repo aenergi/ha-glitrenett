@@ -1,4 +1,4 @@
-"""Data update coordinator for Glitrenett Elbits."""
+"""Data update coordinator for Glitrenett."""
 
 import asyncio
 import hmac

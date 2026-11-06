@@ -1,8 +1,8 @@
 {
-  "name": "Glitrenett Elbits Home Assistant",
+  "name": "Glitrenett Home Assistant",
   "dockerComposeFile": "compose.yaml",
   "service": "homeassistant",
-  "workspaceFolder": "/workspaces/glitrenett_elbits",
+  "workspaceFolder": "/workspaces/glitrenett",
   "forwardPorts": [8123],
   "portsAttributes": {
     "8123": {

@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Koble til Glitrenett Elbits",
+        "title": "Koble til Glitrenett",
         "description": "Angi API-nøkkelen utstedt for Glitrenett og målepunkt-ID-en din.",
         "data": {
           "api_key": "API-nøkkel",
@@ -10,7 +10,7 @@
         }
       },
       "reauth_confirm": {
-        "title": "Autentiser Glitrenett Elbits på nytt",
+        "title": "Autentiser Glitrenett på nytt",
         "description": "Angi en gyldig API-nøkkel for målepunktet ditt.",
         "data": {
           "api_key": "API-nøkkel"
@@ -25,7 +25,7 @@
     },
     "abort": {
       "already_configured": "Dette målepunktet er allerede konfigurert.",
-      "reauth_successful": "Glitrenett Elbits er autentisert på nytt."
+      "reauth_successful": "Glitrenett er autentisert på nytt."
     }
   },
   "entity": {
