@@ -144,26 +144,39 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Return all energy level thresholds and prices."""
-        if self._sensor != "energy_level":
-            return None
         collection = self._collection()
         if collection is None:
             return None
-        levels = self._price_levels(collection)
-        if not levels:
-            return None
-        return {
-            "energy_levels": [
-                {
-                    "name": level.get("levelInfo"),
-                    "min": level.get("valueMin"),
-                    "max": level.get("valueMax"),
-                    "price": level.get("monthlyTotal"),
-                }
-                for level in levels
-            ]
-        }
+        if self._sensor == "energy_level":
+            levels = self._price_levels(collection)
+            if not levels:
+                return None
+            return {
+                "energy_levels": [
+                    {
+                        "name": level.get("levelInfo"),
+                        "min": level.get("valueMin"),
+                        "max": level.get("valueMax"),
+                        "price": level.get("monthlyTotal"),
+                    }
+                    for level in levels
+                ]
+            }
+        if self._sensor == "current_grid_price":
+            hours = self._tariff_hours(collection)
+            if not hours:
+                return None
+            return {
+                "grid_tariff_hours": [
+                    {
+                        "startTime": hour.get("startTime"),
+                        "expiredAt": hour.get("expiredAt"),
+                        "energyPrice": hour.get("energyPrice"),
+                    }
+                    for hour in hours
+                ]
+            }
+        return None
 
     def _collection(self) -> dict[str, Any] | None:
         collections = self.coordinator.data.get("gridTariffCollections")
@@ -174,18 +187,8 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
 
     @staticmethod
     def _current_grid_price(collection: dict[str, Any]) -> float | None:
-        grid_tariff = collection.get("gridTariff")
-        tariff_price = (
-            grid_tariff.get("tariffPrice") if isinstance(grid_tariff, dict) else None
-        )
-        hours = tariff_price.get("hours") if isinstance(tariff_price, dict) else None
-        if not isinstance(hours, list):
-            return None
-
         now = dt_util.utcnow()
-        for hour in hours:
-            if not isinstance(hour, dict):
-                continue
+        for hour in GlitrenettSensor._tariff_hours(collection):
             start = dt_util.parse_datetime(hour.get("startTime"))
             end = dt_util.parse_datetime(hour.get("expiredAt"))
             if start is None or end is None:
@@ -199,6 +202,18 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
                 )
                 return value if isinstance(value, (int, float)) else None
         return None
+
+    @staticmethod
+    def _tariff_hours(collection: dict[str, Any]) -> list[dict[str, Any]]:
+        """Return all hourly tariffs from the current tariff."""
+        grid_tariff = collection.get("gridTariff")
+        tariff_price = (
+            grid_tariff.get("tariffPrice") if isinstance(grid_tariff, dict) else None
+        )
+        hours = tariff_price.get("hours") if isinstance(tariff_price, dict) else None
+        if not isinstance(hours, list):
+            return []
+        return [hour for hour in hours if isinstance(hour, dict)]
 
     @staticmethod
     def _three_hour_average(collection: dict[str, Any]) -> float | None:
