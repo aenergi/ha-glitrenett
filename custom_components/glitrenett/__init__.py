@@ -4,7 +4,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 
-DOMAIN = "glitrenett_elbits"
+DOMAIN = "glitrenett"
 PLATFORMS = (Platform.SENSOR,)
 
 

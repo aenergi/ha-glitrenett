@@ -15,7 +15,7 @@ This is a custom repository, not a listing in HACS's default catalog.
 
 ### Manual
 
-1. Copy `custom_components/glitrenett_elbits` into the `custom_components`
+1. Copy `custom_components/glitrenett` into the `custom_components`
    directory inside your Home Assistant configuration directory.
 2. Restart Home Assistant.
 

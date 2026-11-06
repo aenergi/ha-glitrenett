@@ -1,5 +1,5 @@
 {
-  "domain": "glitrenett_elbits",
+  "domain": "glitrenett",
   "name": "Glitrenett",
   "codeowners": ["@epaulsen"],
   "config_flow": true,

@@ -3,4 +3,4 @@ default_config:
 logger:
   default: warning
   logs:
-    custom_components.glitrenett_elbits: debug
+    custom_components.glitrenett: debug
