@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect to Glitrenett",
-        "description": "Enter the API key issued for Glitrenett and your metering point ID.",
+        "description": "Enter the API key issued for Glitrenett and your metering point ID. If you do not have an API key, [request one from Glitrenett]({api_key_url}).",
         "data": {
           "api_key": "API key",
           "metering_point_id": "Metering point ID"

@@ -11,6 +11,8 @@ from . import DOMAIN
 from .const import CONF_METERING_POINT_ID
 from .coordinator import APIError, RequestThrottled, async_get_tariffs
 
+API_KEY_URL = "https://www.glitrenett.no/kunde/nettleie-og-priser/api-for-nettleiepriser"
+
 
 class GlitrenettConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Glitrenett."""
@@ -25,34 +27,18 @@ class GlitrenettConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             api_key = user_input[CONF_API_KEY].strip()
             metering_point_id = user_input[CONF_METERING_POINT_ID].strip()
             if not api_key or not metering_point_id:
-                return self.async_show_form(
-                    step_id="user",
-                    data_schema=self._get_schema(),
-                    errors={"base": "invalid_input"},
-                )
+                return self._show_user_form({"base": "invalid_input"})
             await self.async_set_unique_id(metering_point_id)
             self._abort_if_unique_id_configured()
             try:
                 await async_get_tariffs(self.hass, api_key, metering_point_id)
             except APIError as err:
                 error = "invalid_auth" if err.status in (401, 403) else "invalid_input"
-                return self.async_show_form(
-                    step_id="user",
-                    data_schema=self._get_schema(),
-                    errors={"base": error},
-                )
+                return self._show_user_form({"base": error})
             except RequestThrottled:
-                return self.async_show_form(
-                    step_id="user",
-                    data_schema=self._get_schema(),
-                    errors={"base": "request_throttled"},
-                )
+                return self._show_user_form({"base": "request_throttled"})
             except UpdateFailed:
-                return self.async_show_form(
-                    step_id="user",
-                    data_schema=self._get_schema(),
-                    errors={"base": "cannot_connect"},
-                )
+                return self._show_user_form({"base": "cannot_connect"})
             return self.async_create_entry(
                 title="Glitrenett",
                 data={
@@ -61,7 +47,16 @@ class GlitrenettConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 },
             )
 
-        return self.async_show_form(step_id="user", data_schema=self._get_schema())
+        return self._show_user_form()
+
+    def _show_user_form(self, errors: dict[str, str] | None = None) -> FlowResult:
+        """Show the setup form with the API key request link."""
+        return self.async_show_form(
+            step_id="user",
+            data_schema=self._get_schema(),
+            errors=errors,
+            description_placeholders={"api_key_url": API_KEY_URL},
+        )
 
     async def async_step_reauth(self, _: dict[str, str] | None = None) -> FlowResult:
         """Handle reauthentication for an existing config entry."""
