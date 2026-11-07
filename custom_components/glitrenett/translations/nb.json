@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Koble til Glitrenett",
-        "description": "Angi API-nøkkelen utstedt for Glitrenett og målepunkt-ID-en din. Hvis du ikke har en API-nøkkel, fyll ut skjemaet ved å følge <a href=\"https://www.glitrenett.no/kunde/nettleie-og-priser/api-for-nettleiepriser\">denne lenken.</a>",
+        "description": "Angi API-nøkkelen utstedt for Glitrenett og målepunkt-ID-en din. Hvis du ikke har en API-nøkkel, [søk om en hos Glitrenett]({api_key_url}).",
         "data": {
           "api_key": "API-nøkkel",
           "metering_point_id": "Målepunkt-ID"
