@@ -24,7 +24,7 @@ from homeassistant.helpers.update_coordinator import (
 from homeassistant.util import dt as dt_util
 
 from . import DOMAIN
-from .const import CONF_METERING_POINT_ID
+from .const import CONF_METERING_POINT_ID, SUBENTRY_METERING_POINT
 
 BASE_URL = "https://api.aenergi.no/Glitrenett/gridtariff/api/1"
 UPDATE_INTERVAL = timedelta(hours=1)
@@ -48,40 +48,96 @@ class RequestThrottled(Exception):
 class _RequestState:
     """Cached response and outbound request time for a metering point."""
 
-    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     last_request: float | None = None
     data: dict[str, Any] | None = None
     api_key_fingerprint: bytes | None = None
+    last_request_failed: bool = False
+
+
+@dataclass
+class _RequestCache:
+    """Coordinate requests and cache data across flows and coordinators."""
+
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    states: dict[str, _RequestState] = field(default_factory=dict)
     fingerprint_secret: bytes = field(default_factory=lambda: secrets.token_bytes(32))
 
 
-def _get_request_state(hass: HomeAssistant, metering_point_id: str) -> _RequestState:
-    """Return request state shared by config flows and coordinators."""
-    states = hass.data.setdefault(_REQUEST_STATE_KEY, {})
-    return states.setdefault(metering_point_id, _RequestState())
+def _index_metering_points(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Associate each metering point with its tariff and price-level group."""
+    collections = data.get("gridTariffCollections")
+    if collections is None:
+        return {}
+    if not isinstance(collections, list):
+        raise UpdateFailed("Invalid grid tariff collections in API response")
+    result: dict[str, dict[str, Any]] = {}
+    for collection in collections:
+        if not isinstance(collection, dict):
+            raise UpdateFailed("Invalid grid tariff collection in API response")
+        groups = collection.get("meteringPointsAndPriceLevels")
+        if groups is None:
+            continue
+        if not isinstance(groups, list):
+            raise UpdateFailed("Invalid metering point groups in API response")
+        for group in groups:
+            if not isinstance(group, dict):
+                raise UpdateFailed("Invalid metering point group in API response")
+            points = group.get("meteringPoints")
+            if points is None:
+                continue
+            if not isinstance(points, list):
+                raise UpdateFailed("Invalid metering points in API response")
+            for point in points:
+                if not isinstance(point, dict) or not isinstance(
+                    point.get("meteringPointId"), str
+                ):
+                    raise UpdateFailed("Invalid metering point in API response")
+                point_id = point["meteringPointId"]
+                if point_id in result:
+                    raise UpdateFailed("Duplicate metering point in API response")
+                result[point_id] = {
+                    "collection": collection,
+                    "group": group,
+                    "point": point,
+                }
+    return result
 
 
 async def async_get_tariffs(
-    hass: HomeAssistant, api_key: str, metering_point_id: str
-) -> dict[str, Any]:
-    """Fetch tariffs while enforcing the per-metering-point hourly request limit."""
-    state = _get_request_state(hass, metering_point_id)
+    hass: HomeAssistant, api_key: str, metering_point_ids: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Fetch tariffs in batches, respecting the per-point hourly request limit."""
+    if not metering_point_ids:
+        return {}
+    cache: _RequestCache = hass.data.setdefault(_REQUEST_STATE_KEY, _RequestCache())
     api_key_fingerprint = hmac.digest(
-        state.fingerprint_secret, api_key.encode(), "sha256"
+        cache.fingerprint_secret, api_key.encode(), "sha256"
     )
-    async with state.lock:
+    async with cache.lock:
         now = time.monotonic()
-        if (
-            state.last_request is not None
-            and now - state.last_request < UPDATE_INTERVAL.total_seconds()
-        ):
+        result: dict[str, dict[str, Any]] = {}
+        to_fetch: list[str] = []
+        for point_id in dict.fromkeys(metering_point_ids):
+            state = cache.states.setdefault(point_id, _RequestState())
             if (
-                state.data is not None
-                and state.api_key_fingerprint == api_key_fingerprint
+                state.last_request is not None
+                and now - state.last_request < UPDATE_INTERVAL.total_seconds()
             ):
-                return state.data
-            raise RequestThrottled
+                if (
+                    state.last_request_failed
+                    or state.api_key_fingerprint != api_key_fingerprint
+                ):
+                    raise RequestThrottled
+                if state.data is not None:
+                    result[point_id] = state.data
+            else:
+                to_fetch.append(point_id)
+        if not to_fetch:
+            return result
 
+        for point_id in to_fetch:
+            cache.states[point_id].last_request = now
+            cache.states[point_id].last_request_failed = True
         try:
             start_of_current_day = dt_util.start_of_local_day()
             end_of_next_day = start_of_current_day + timedelta(days=2) - timedelta(
@@ -93,32 +149,40 @@ async def async_get_tariffs(
                 json={
                     "startTime": start_of_current_day.isoformat(timespec="seconds"),
                     "endTime": end_of_next_day.isoformat(timespec="seconds"),
-                    "meteringPointIds": [metering_point_id],
+                    "meteringPointIds": to_fetch,
                 },
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if 400 <= response.status < 500:
                     raise APIError(response.status)
                 if response.status == 304:
-                    if (
-                        state.data is None
-                        or state.api_key_fingerprint != api_key_fingerprint
+                    if any(
+                        cache.states[point_id].api_key_fingerprint
+                        != api_key_fingerprint
+                        for point_id in to_fetch
                     ):
                         raise UpdateFailed(
                             "Received not-modified without a cached tariff response"
                         )
-                    state.last_request = time.monotonic()
-                    return state.data
-                if response.status == 204:
+                    indexed = {
+                        point_id: cache.states[point_id].data
+                        for point_id in to_fetch
+                        if cache.states[point_id].data is not None
+                    }
+                elif response.status == 204:
                     data = {"gridTariffCollections": []}
+                    indexed = _index_metering_points(data)
                 else:
                     response.raise_for_status()
                     data = await response.json()
-                response_json = json.dumps(data, ensure_ascii=False, indent=2)
-                _LOGGER.debug(
-                    "Glitrenett API response: %s",
-                    response_json,
-                )
+                    if not isinstance(data, dict):
+                        raise UpdateFailed("Invalid response from Glitrenett API")
+                    indexed = _index_metering_points(data)
+                if response.status != 304:
+                    _LOGGER.debug(
+                        "Glitrenett API response: %s",
+                        json.dumps(data, ensure_ascii=False, indent=2),
+                    )
         except APIError:
             raise
         except (aiohttp.ClientError, TimeoutError) as err:
@@ -126,23 +190,18 @@ async def async_get_tariffs(
         except ValueError as err:
             raise UpdateFailed("Invalid response from Glitrenett API") from err
 
-        if not isinstance(data, dict):
-            raise UpdateFailed("Invalid response from Glitrenett API")
-        collections = data.get("gridTariffCollections", [])
-        if collections is None:
-            collections = []
-        if not isinstance(collections, list) or any(
-            not isinstance(collection, dict) for collection in collections
-        ):
-            raise UpdateFailed("Invalid response from Glitrenett API")
-        data["gridTariffCollections"] = collections
-        state.data = data
-        state.api_key_fingerprint = api_key_fingerprint
-        state.last_request = time.monotonic()
-        return data
+        for point_id in to_fetch:
+            state = cache.states[point_id]
+            state.data = indexed.get(point_id)
+            state.api_key_fingerprint = api_key_fingerprint
+            state.last_request = time.monotonic()
+            state.last_request_failed = False
+            if state.data is not None:
+                result[point_id] = state.data
+        return result
 
 
-class GlitrenettCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+class GlitrenettCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     """Fetch tariff data from the Glitrenett API."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -154,13 +213,16 @@ class GlitrenettCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=UPDATE_INTERVAL,
         )
         self._api_key = entry.data[CONF_API_KEY]
-        self._metering_point_id = entry.data[CONF_METERING_POINT_ID]
+        self._metering_point_ids = [
+            subentry.data[CONF_METERING_POINT_ID]
+            for subentry in entry.get_subentries_of_type(SUBENTRY_METERING_POINT)
+        ]
 
-    async def _async_update_data(self) -> dict[str, Any]:
-        """Get today's grid tariffs for the configured metering point."""
+    async def _async_update_data(self) -> dict[str, dict[str, Any]]:
+        """Get today's grid tariffs for configured metering points."""
         try:
             return await async_get_tariffs(
-                self.hass, self._api_key, self._metering_point_id
+                self.hass, self._api_key, self._metering_point_ids
             )
         except APIError as err:
             if err.status in (401, 403):
