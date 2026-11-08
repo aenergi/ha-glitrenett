@@ -70,6 +70,8 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
             self._attr_native_unit_of_measurement = "NOK/kWh"
         elif sensor == "three_hour_average":
             self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+        elif sensor == "energy_level_price":
+            self._attr_native_unit_of_measurement = "NOK/month"
         self._cancel_tariff_change: Callable[[], None] | None = None
 
     async def async_added_to_hass(self) -> None:
