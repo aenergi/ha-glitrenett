@@ -5,33 +5,40 @@ from math import inf
 from typing import Any, Callable
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from . import DOMAIN
+from .const import CONF_METERING_POINT_ID, SUBENTRY_METERING_POINT
 from .coordinator import GlitrenettCoordinator
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the Glitrenett tariff sensors."""
     coordinator: GlitrenettCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        [
-            GlitrenettSensor(coordinator, entry, "current_grid_price"),
-            GlitrenettSensor(coordinator, entry, "three_hour_average"),
-            GlitrenettSensor(coordinator, entry, "energy_level_price"),
-            GlitrenettSensor(coordinator, entry, "energy_level"),
-        ]
-    )
+    for subentry in entry.get_subentries_of_type(SUBENTRY_METERING_POINT):
+        async_add_entities(
+            [
+                GlitrenettSensor(coordinator, subentry, sensor)
+                for sensor in (
+                    "current_grid_price",
+                    "three_hour_average",
+                    "energy_level_price",
+                    "energy_level",
+                )
+            ],
+            config_subentry_id=subentry.subentry_id,
+        )
 
 
 class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
@@ -40,12 +47,19 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
     def __init__(
-        self, coordinator: GlitrenettCoordinator, entry: ConfigEntry, sensor: str
+        self, coordinator: GlitrenettCoordinator, subentry: ConfigSubentry, sensor: str
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._sensor = sensor
-        self._attr_unique_id = f"{entry.entry_id}_{sensor}"
+        self._point_id = subentry.data[CONF_METERING_POINT_ID]
+        self._attr_unique_id = f"{self._point_id}_{sensor}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._point_id)},
+            name=subentry.title,
+            manufacturer="Glitrenett",
+            entry_type=DeviceEntryType.SERVICE,
+        )
         self._attr_translation_key = sensor
         self._attr_icon = (
             "mdi:transmission-tower"
@@ -56,6 +70,8 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
             self._attr_native_unit_of_measurement = "NOK/kWh"
         elif sensor == "three_hour_average":
             self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+        elif sensor == "energy_level_price":
+            self._attr_native_unit_of_measurement = "NOK/month"
         self._cancel_tariff_change: Callable[[], None] | None = None
 
     async def async_added_to_hass(self) -> None:
@@ -131,7 +147,7 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
         if self._sensor == "current_grid_price":
             return self._current_grid_price(collection)
         if self._sensor == "three_hour_average":
-            return self._three_hour_average(collection)
+            return self._three_hour_average()
 
         level = self._current_energy_level(collection)
         if level is None:
@@ -179,10 +195,10 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
         return None
 
     def _collection(self) -> dict[str, Any] | None:
-        collections = self.coordinator.data.get("gridTariffCollections")
-        if not isinstance(collections, list) or not collections:
+        point_data = self.coordinator.data.get(self._point_id)
+        if point_data is None:
             return None
-        collection = collections[0]
+        collection = point_data.get("collection")
         return collection if isinstance(collection, dict) else None
 
     @staticmethod
@@ -215,25 +231,12 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
             return []
         return [hour for hour in hours if isinstance(hour, dict)]
 
-    @staticmethod
-    def _three_hour_average(collection: dict[str, Any]) -> float | None:
-        metering_data = collection.get("meteringPointsAndPriceLevels")
-        if not isinstance(metering_data, list):
+    def _three_hour_average(self) -> float | None:
+        point_data = self.coordinator.data.get(self._point_id)
+        if point_data is None:
             return None
-
-        for metering_data_entry in metering_data:
-            if not isinstance(metering_data_entry, dict):
-                continue
-            points = metering_data_entry.get("meteringPoints")
-            if not isinstance(points, list):
-                continue
-            for point in points:
-                if not isinstance(point, dict):
-                    continue
-                value = point.get("levelValue")
-                if isinstance(value, (int, float)):
-                    return value
-        return None
+        value = point_data["point"].get("levelValue")
+        return value if isinstance(value, (int, float)) else None
 
     @staticmethod
     def _price_levels(collection: dict[str, Any]) -> list[dict[str, Any]]:
@@ -268,7 +271,43 @@ class GlitrenettSensor(CoordinatorEntity[GlitrenettCoordinator], SensorEntity):
     def _current_energy_level(
         self, collection: dict[str, Any]
     ) -> dict[str, Any] | None:
-        consumption = self._three_hour_average(collection)
+        point_data = self.coordinator.data.get(self._point_id)
+        if point_data is None:
+            return None
+        current_level = point_data["group"].get("currentFixedPriceLevel")
+        if isinstance(current_level, dict) and current_level.get("levelId") is not None:
+            grid_tariff = collection.get("gridTariff")
+            tariff_price = (
+                grid_tariff.get("tariffPrice") if isinstance(grid_tariff, dict) else None
+            )
+            price_info = (
+                tariff_price.get("priceInfo") if isinstance(tariff_price, dict) else None
+            )
+            fixed_prices = (
+                price_info.get("fixedPrices") if isinstance(price_info, dict) else None
+            )
+            if not isinstance(fixed_prices, list):
+                return None
+            for fixed_price in fixed_prices:
+                if not isinstance(fixed_price, dict) or fixed_price.get(
+                    "id"
+                ) != current_level.get("id"):
+                    continue
+                price_levels = fixed_price.get("priceLevels")
+                if not isinstance(price_levels, list):
+                    return None
+                return next(
+                    (
+                        level
+                        for level in price_levels
+                        if isinstance(level, dict)
+                        and level.get("id") == current_level["levelId"]
+                    ),
+                    None,
+                )
+            return None
+
+        consumption = self._three_hour_average()
         if consumption is None:
             return None
 

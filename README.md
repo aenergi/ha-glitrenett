@@ -22,12 +22,16 @@ This is a custom repository, not a listing in HACS's default catalog.
 ## Configuration
 
 After restarting Home Assistant, add **Glitrenett** from
-**Settings > Devices & services > Add integration**. Enter the API key issued
-for the Glitrenett API and the metering point ID associated with your account.
-The integration checks these values with the API during setup.
-The integration creates sensors for the current grid price, the top-three-hours
-average consumption, and the current energy level and its price. It requests
-today's tariffs and refreshes no more often than once per hour.
+**Settings > Devices & services > Add integration**. Enter your Glitrenett API
+key, then add a name and metering point ID for each metering point. You can
+also add or remove metering points from the integration's configuration page;
+the API key is shared. Each point appears as a device with sensors for the
+current grid price, top-three-hours average consumption, and current energy
+level and its price. The integration requests tariffs for all configured
+points and refreshes each point no more often than once per hour.
+
+Existing installations from before multi-point support must remove and add the
+integration again. Their previous entity IDs and history are not migrated.
 
 The API key is sent to `https://api.aenergi.no/Glitrenett/gridtariff/api/1`
 using the `X-API-Key` header. The API provider recommends limiting requests to
@@ -35,8 +39,15 @@ once per day; the integration's hourly interval is the maximum polling rate.
 
 ## Validation
 
-The GitHub Actions validation workflow runs HACS repository validation and
-Home Assistant's hassfest on pushes, pull requests, manual runs, and daily.
+The GitHub Actions validation workflow runs integration tests, HACS repository
+validation, and Home Assistant's hassfest on pushes, pull requests, manual
+runs, and daily. To run the tests locally with Docker:
+
+```shell
+docker run --rm -v "$PWD:/workspace" -w /workspace \
+  --entrypoint python ghcr.io/home-assistant/home-assistant:stable \
+  -m unittest discover -s tests -v
+```
 
 ## Development
 

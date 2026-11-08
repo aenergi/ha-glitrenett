@@ -3,10 +3,18 @@
     "step": {
       "user": {
         "title": "Koble til Glitrenett",
-        "description": "Angi API-nøkkelen utstedt for Glitrenett og målepunkt-ID-en din. Hvis du ikke har en API-nøkkel, [søk om en hos Glitrenett]({api_key_url}).",
+        "description": "Angi API-nøkkelen din for Glitrenett. Hvis du ikke har en, [søk om en hos Glitrenett]({api_key_url}).",
         "data": {
-          "api_key": "API-nøkkel",
-          "metering_point_id": "Målepunkt-ID"
+          "api_key": "API-nøkkel"
+        }
+      },
+      "metering_point": {
+        "title": "Legg til et målepunkt",
+        "description": "Angi navn og målepunkt-ID. Velg alternativet nedenfor for å legge til flere målepunkter.",
+        "data": {
+          "name": "Navn",
+          "metering_point_id": "Målepunkt-ID",
+          "add_another": "Legg til et målepunkt til"
         }
       },
       "reauth_confirm": {
@@ -18,14 +26,42 @@
       }
     },
     "error": {
-      "invalid_input": "Angi begge verdiene, og kontroller at API-et godtar legitimasjonen og målepunkt-ID-en.",
+      "invalid_input": "Angi gyldige verdier og kontroller at API-et godtar forespørselen.",
       "invalid_auth": "API-nøkkelen ble avvist.",
       "cannot_connect": "Kan ikke koble til Glitrenett-API-et.",
-      "request_throttled": "En forespørsel ble nylig sendt. Prøv igjen når timegrensen nullstilles."
+      "request_throttled": "En forespørsel ble nylig sendt. Prøv igjen når timegrensen nullstilles.",
+      "already_configured": "Dette målepunktet er allerede konfigurert.",
+      "point_not_found": "API-et returnerte ikke dette målepunktet. Kontroller ID-en og API-nøkkelen.",
+      "no_metering_points": "Legg til et målepunkt før du autentiserer på nytt."
     },
     "abort": {
       "already_configured": "Dette målepunktet er allerede konfigurert.",
       "reauth_successful": "Glitrenett er autentisert på nytt."
+    }
+  },
+  "config_subentries": {
+    "metering_point": {
+      "entry_type": "Målepunkt",
+      "initiate_flow": {
+        "user": "Legg til målepunkt"
+      },
+      "step": {
+        "user": {
+          "title": "Legg til et målepunkt",
+          "data": {
+            "name": "Navn",
+            "metering_point_id": "Målepunkt-ID"
+          }
+        }
+      },
+      "error": {
+        "invalid_input": "Angi navn og målepunkt-ID.",
+        "invalid_auth": "API-nøkkelen ble avvist.",
+        "cannot_connect": "Kan ikke koble til Glitrenett-API-et.",
+        "request_throttled": "En forespørsel ble nylig sendt. Prøv igjen når timegrensen nullstilles.",
+        "already_configured": "Dette målepunktet er allerede konfigurert.",
+        "point_not_found": "API-et returnerte ikke dette målepunktet. Kontroller ID-en og API-nøkkelen."
+      }
     }
   },
   "entity": {

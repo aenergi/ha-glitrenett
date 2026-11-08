@@ -3,10 +3,18 @@
     "step": {
       "user": {
         "title": "Connect to Glitrenett",
-        "description": "Enter the API key issued for Glitrenett and your metering point ID. If you do not have an API key, [request one from Glitrenett]({api_key_url}).",
+        "description": "Enter your Glitrenett API key. If you do not have one, [request one from Glitrenett]({api_key_url}).",
         "data": {
-          "api_key": "API key",
-          "metering_point_id": "Metering point ID"
+          "api_key": "API key"
+        }
+      },
+      "metering_point": {
+        "title": "Add a metering point",
+        "description": "Enter a name and metering point ID. Select the option below to add another point.",
+        "data": {
+          "name": "Name",
+          "metering_point_id": "Metering point ID",
+          "add_another": "Add another metering point"
         }
       },
       "reauth_confirm": {
@@ -18,14 +26,42 @@
       }
     },
     "error": {
-      "invalid_input": "Enter both values and ensure the API accepts the credentials and metering point ID.",
+      "invalid_input": "Enter valid values and ensure the API accepts the request.",
       "invalid_auth": "The API key was rejected.",
       "cannot_connect": "Unable to connect to the Glitrenett API.",
-      "request_throttled": "A request was recently made. Try again after the hourly limit resets."
+      "request_throttled": "A request was recently made. Try again after the hourly limit resets.",
+      "already_configured": "This metering point is already configured.",
+      "point_not_found": "The API did not return this metering point. Check its ID and API key.",
+      "no_metering_points": "Add a metering point before reauthenticating."
     },
     "abort": {
       "already_configured": "This metering point is already configured.",
       "reauth_successful": "Glitrenett has been reauthenticated."
+    }
+  },
+  "config_subentries": {
+    "metering_point": {
+      "entry_type": "Metering point",
+      "initiate_flow": {
+        "user": "Add metering point"
+      },
+      "step": {
+        "user": {
+          "title": "Add a metering point",
+          "data": {
+            "name": "Name",
+            "metering_point_id": "Metering point ID"
+          }
+        }
+      },
+      "error": {
+        "invalid_input": "Enter a name and metering point ID.",
+        "invalid_auth": "The API key was rejected.",
+        "cannot_connect": "Unable to connect to the Glitrenett API.",
+        "request_throttled": "A request was recently made. Try again after the hourly limit resets.",
+        "already_configured": "This metering point is already configured.",
+        "point_not_found": "The API did not return this metering point. Check its ID and API key."
+      }
     }
   },
   "entity": {

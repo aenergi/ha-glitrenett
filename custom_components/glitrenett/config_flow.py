@@ -3,59 +3,132 @@
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_API_KEY
+from homeassistant.config_entries import ConfigEntry, ConfigSubentryData
+from homeassistant.const import CONF_API_KEY, CONF_NAME
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from . import DOMAIN
-from .const import CONF_METERING_POINT_ID
+from .const import CONF_METERING_POINT_ID, SUBENTRY_METERING_POINT
 from .coordinator import APIError, RequestThrottled, async_get_tariffs
 
 API_KEY_URL = "https://www.glitrenett.no/kunde/nettleie-og-priser/api-for-nettleiepriser"
+CONF_ADD_ANOTHER = "add_another"
+
+
+def _point_is_configured(hass: HomeAssistant, point_id: str) -> bool:
+    """Check all entries for an existing metering point."""
+    return any(
+        subentry.unique_id == point_id
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        for subentry in entry.get_subentries_of_type(SUBENTRY_METERING_POINT)
+    )
+
+
+async def _validate_point(
+    hass: HomeAssistant, api_key: str, point_id: str
+) -> str | None:
+    """Validate a metering point and return a flow error, if any."""
+    try:
+        tariffs = await async_get_tariffs(hass, api_key, [point_id])
+    except APIError as err:
+        return "invalid_auth" if err.status in (401, 403) else "invalid_input"
+    except RequestThrottled:
+        return "request_throttled"
+    except UpdateFailed:
+        return "cannot_connect"
+    if point_id not in tariffs:
+        return "point_not_found"
+    return None
+
+
+def _point_schema(*, add_another: bool = False) -> vol.Schema:
+    """Return a schema for a named metering point."""
+    fields = {
+        vol.Required(CONF_NAME): str,
+        vol.Required(CONF_METERING_POINT_ID): str,
+    }
+    if add_another:
+        fields[vol.Optional(CONF_ADD_ANOTHER, default=False)] = bool
+    return vol.Schema(fields)
 
 
 class GlitrenettConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Glitrenett."""
 
-    VERSION = 1
+    VERSION = 2
+
+    def __init__(self) -> None:
+        """Initialize the flow."""
+        self._api_key = ""
+        self._points: list[ConfigSubentryData] = []
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[config_entries.ConfigSubentryFlow]]:
+        """Support independently managed metering points."""
+        return {SUBENTRY_METERING_POINT: GlitrenettMeteringPointFlow}
 
     async def async_step_user(
         self, user_input: dict[str, str] | None = None
     ) -> FlowResult:
-        """Set up the integration."""
+        """Ask for the account API key."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            api_key = user_input[CONF_API_KEY].strip()
-            metering_point_id = user_input[CONF_METERING_POINT_ID].strip()
-            if not api_key or not metering_point_id:
-                return self._show_user_form({"base": "invalid_input"})
-            await self.async_set_unique_id(metering_point_id)
-            self._abort_if_unique_id_configured()
-            try:
-                await async_get_tariffs(self.hass, api_key, metering_point_id)
-            except APIError as err:
-                error = "invalid_auth" if err.status in (401, 403) else "invalid_input"
-                return self._show_user_form({"base": error})
-            except RequestThrottled:
-                return self._show_user_form({"base": "request_throttled"})
-            except UpdateFailed:
-                return self._show_user_form({"base": "cannot_connect"})
-            return self.async_create_entry(
-                title="Glitrenett",
-                data={
-                    CONF_API_KEY: api_key,
-                    CONF_METERING_POINT_ID: metering_point_id,
-                },
-            )
-
-        return self._show_user_form()
-
-    def _show_user_form(self, errors: dict[str, str] | None = None) -> FlowResult:
-        """Show the setup form with the API key request link."""
+            self._api_key = user_input[CONF_API_KEY].strip()
+            if self._api_key:
+                return await self.async_step_metering_point()
+            errors["base"] = "invalid_input"
         return self.async_show_form(
             step_id="user",
-            data_schema=self._get_schema(),
+            data_schema=vol.Schema({vol.Required(CONF_API_KEY): str}),
             errors=errors,
             description_placeholders={"api_key_url": API_KEY_URL},
+            last_step=False,
+        )
+
+    async def async_step_metering_point(
+        self, user_input: dict[str, str | bool] | None = None
+    ) -> FlowResult:
+        """Add one or more metering points before creating the account."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            name = str(user_input[CONF_NAME]).strip()
+            point_id = str(user_input[CONF_METERING_POINT_ID]).strip()
+            if not name or not point_id:
+                errors["base"] = "invalid_input"
+            elif _point_is_configured(self.hass, point_id) or any(
+                point["unique_id"] == point_id for point in self._points
+            ):
+                errors["base"] = "already_configured"
+            elif error := await _validate_point(self.hass, self._api_key, point_id):
+                errors["base"] = error
+            else:
+                self._points.append(
+                    {
+                        "subentry_type": SUBENTRY_METERING_POINT,
+                        "title": name,
+                        "unique_id": point_id,
+                        "data": {CONF_METERING_POINT_ID: point_id},
+                    }
+                )
+                if user_input.get(CONF_ADD_ANOTHER):
+                    return self.async_show_form(
+                        step_id="metering_point",
+                        data_schema=_point_schema(add_another=True),
+                    )
+                return self.async_create_entry(
+                    title="Glitrenett",
+                    data={CONF_API_KEY: self._api_key},
+                    subentries=self._points,
+                )
+        return self.async_show_form(
+            step_id="metering_point",
+            data_schema=_point_schema(add_another=True),
+            errors=errors,
         )
 
     async def async_step_reauth(self, _: dict[str, str] | None = None) -> FlowResult:
@@ -67,53 +140,60 @@ class GlitrenettConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, str] | None = None
     ) -> FlowResult:
         """Confirm an updated API key."""
-        entry = self._reauth_entry
+        errors: dict[str, str] = {}
         if user_input is not None:
             api_key = user_input[CONF_API_KEY].strip()
-            try:
-                await async_get_tariffs(
-                    self.hass, api_key, entry.data[CONF_METERING_POINT_ID]
+            points = self._reauth_entry.get_subentries_of_type(SUBENTRY_METERING_POINT)
+            if not api_key:
+                errors["base"] = "invalid_input"
+            elif not points:
+                errors["base"] = "no_metering_points"
+            elif error := await _validate_point(
+                self.hass, api_key, points[0].data[CONF_METERING_POINT_ID]
+            ):
+                errors["base"] = error
+            else:
+                changed = self.hass.config_entries.async_update_entry(
+                    self._reauth_entry,
+                    data={**self._reauth_entry.data, CONF_API_KEY: api_key},
                 )
-            except APIError as err:
-                error = "invalid_auth" if err.status in (401, 403) else "invalid_input"
-                return self.async_show_form(
-                    step_id="reauth_confirm",
-                    data_schema=self._reauth_schema(),
-                    errors={"base": error},
-                )
-            except RequestThrottled:
-                return self.async_show_form(
-                    step_id="reauth_confirm",
-                    data_schema=self._reauth_schema(),
-                    errors={"base": "request_throttled"},
-                )
-            except UpdateFailed:
-                return self.async_show_form(
-                    step_id="reauth_confirm",
-                    data_schema=self._reauth_schema(),
-                    errors={"base": "cannot_connect"},
-                )
-            self.hass.config_entries.async_update_entry(
-                entry, data={**entry.data, CONF_API_KEY: api_key}
-            )
-            await self.hass.config_entries.async_reload(entry.entry_id)
-            return self.async_abort(reason="reauth_successful")
-
+                if not changed or not self._reauth_entry.update_listeners:
+                    self.hass.config_entries.async_schedule_reload(
+                        self._reauth_entry.entry_id
+                    )
+                return self.async_abort(reason="reauth_successful")
         return self.async_show_form(
-            step_id="reauth_confirm", data_schema=self._reauth_schema()
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_API_KEY): str}),
+            errors=errors,
         )
 
-    @staticmethod
-    def _get_schema() -> vol.Schema:
-        """Return the configuration form schema."""
-        return vol.Schema(
-            {
-                vol.Required(CONF_API_KEY): str,
-                vol.Required(CONF_METERING_POINT_ID): str,
-            }
-        )
 
-    @staticmethod
-    def _reauth_schema() -> vol.Schema:
-        """Return the reauthentication form schema."""
-        return vol.Schema({vol.Required(CONF_API_KEY): str})
+class GlitrenettMeteringPointFlow(config_entries.ConfigSubentryFlow):
+    """Add a metering point to an existing account."""
+
+    async def async_step_user(
+        self, user_input: dict[str, str] | None = None
+    ) -> FlowResult:
+        """Validate and add a metering point."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            name = user_input[CONF_NAME].strip()
+            point_id = user_input[CONF_METERING_POINT_ID].strip()
+            if not name or not point_id:
+                errors["base"] = "invalid_input"
+            elif _point_is_configured(self.hass, point_id):
+                errors["base"] = "already_configured"
+            elif error := await _validate_point(
+                self.hass, self._get_entry().data[CONF_API_KEY], point_id
+            ):
+                errors["base"] = error
+            else:
+                return self.async_create_entry(
+                    title=name,
+                    data={CONF_METERING_POINT_ID: point_id},
+                    unique_id=point_id,
+                )
+        return self.async_show_form(
+            step_id="user", data_schema=_point_schema(), errors=errors
+        )
