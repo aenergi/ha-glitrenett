@@ -10,7 +10,11 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from . import DOMAIN
-from .const import CONF_METERING_POINT_ID, SUBENTRY_METERING_POINT
+from .const import (
+    CONF_METERING_POINT_ID,
+    METERING_POINT_RANGES,
+    SUBENTRY_METERING_POINT,
+)
 from .coordinator import APIError, RequestThrottled, async_get_tariffs
 
 API_KEY_URL = "https://www.glitrenett.no/kunde/nettleie-og-priser/api-for-nettleiepriser"
@@ -30,6 +34,10 @@ async def _validate_point(
     hass: HomeAssistant, api_key: str, point_id: str
 ) -> str | None:
     """Validate a metering point and return a flow error, if any."""
+    if len(point_id) != 18 or not point_id.isascii() or not point_id.isdigit():
+        return "invalid_metering_point_format"
+    if not any(start <= point_id[:17] <= end for start, end in METERING_POINT_RANGES):
+        return "metering_point_out_of_range"
     try:
         tariffs = await async_get_tariffs(hass, api_key, [point_id])
     except APIError as err:
@@ -105,7 +113,14 @@ class GlitrenettConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ):
                 errors["base"] = "already_configured"
             elif error := await _validate_point(self.hass, self._api_key, point_id):
-                errors["base"] = error
+                errors[
+                    CONF_METERING_POINT_ID
+                    if error in (
+                        "invalid_metering_point_format",
+                        "metering_point_out_of_range",
+                    )
+                    else "base"
+                ] = error
             else:
                 self._points.append(
                     {
@@ -187,7 +202,14 @@ class GlitrenettMeteringPointFlow(config_entries.ConfigSubentryFlow):
             elif error := await _validate_point(
                 self.hass, self._get_entry().data[CONF_API_KEY], point_id
             ):
-                errors["base"] = error
+                errors[
+                    CONF_METERING_POINT_ID
+                    if error in (
+                        "invalid_metering_point_format",
+                        "metering_point_out_of_range",
+                    )
+                    else "base"
+                ] = error
             else:
                 return self.async_create_entry(
                     title=name,

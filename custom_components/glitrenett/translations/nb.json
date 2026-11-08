@@ -26,6 +26,8 @@
       }
     },
     "error": {
+      "invalid_metering_point_format": "Angi en målepunkt-ID med nøyaktig 18 sifre.",
+      "metering_point_out_of_range": "Denne målepunkt-ID-en er utenfor de støttede nummerseriene til Glitre Nett.",
       "invalid_input": "Angi gyldige verdier og kontroller at API-et godtar forespørselen.",
       "invalid_auth": "API-nøkkelen ble avvist.",
       "cannot_connect": "Kan ikke koble til Glitrenett-API-et.",
@@ -55,6 +57,8 @@
         }
       },
       "error": {
+        "invalid_metering_point_format": "Angi en målepunkt-ID med nøyaktig 18 sifre.",
+        "metering_point_out_of_range": "Denne målepunkt-ID-en er utenfor de støttede nummerseriene til Glitre Nett.",
         "invalid_input": "Angi navn og målepunkt-ID.",
         "invalid_auth": "API-nøkkelen ble avvist.",
         "cannot_connect": "Kan ikke koble til Glitrenett-API-et.",

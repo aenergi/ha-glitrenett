@@ -13,6 +13,7 @@ from custom_components.glitrenett import _async_reload_entry
 from custom_components.glitrenett.config_flow import (
     GlitrenettConfigFlow,
     GlitrenettMeteringPointFlow,
+    _validate_point,
 )
 from custom_components.glitrenett.coordinator import (
     APIError,
@@ -202,6 +203,79 @@ class RequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.session.post.call_count, 2)
 
 
+class MeteringPointValidationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_all_range_endpoints_are_inclusive_and_last_digit_is_ignored(self):
+        ranges = (
+            ("70705750007619000", "70705750008018999"),
+            ("70705750004571000", "70705750004609999"),
+            ("70705750002270000", "70705750002349999"),
+            ("70705750001221000", "70705750001260999"),
+            ("70705750008191000", "70705750008215999"),
+            ("70705750008220000", "70705750008244999"),
+        )
+        hass = SimpleNamespace()
+        for start, end in ranges:
+            for prefix in (start, end):
+                for last_digit in ("0", "9"):
+                    point_id = prefix + last_digit
+                    with self.subTest(point_id=point_id), patch(
+                        "custom_components.glitrenett.config_flow.async_get_tariffs",
+                        new=AsyncMock(return_value={point_id: {}}),
+                    ) as fetch:
+                        self.assertIsNone(await _validate_point(hass, "key", point_id))
+                        fetch.assert_awaited_once_with(hass, "key", [point_id])
+            for prefix in (str(int(start) - 1), str(int(end) + 1)):
+                with self.subTest(prefix=prefix), patch(
+                    "custom_components.glitrenett.config_flow.async_get_tariffs",
+                    new=AsyncMock(),
+                ) as fetch:
+                    self.assertEqual(
+                        await _validate_point(hass, "key", prefix + "0"),
+                        "metering_point_out_of_range",
+                    )
+                    fetch.assert_not_awaited()
+
+    async def test_invalid_input_in_both_flows_never_calls_api(self):
+        cases = (
+            ("70705750007619000", "invalid_metering_point_format"),
+            ("7070575000761900000", "invalid_metering_point_format"),
+            ("70705750007619000x", "invalid_metering_point_format"),
+            ("７０７０５７５０００７６１９００００", "invalid_metering_point_format"),
+            ("70705750007619 000", "invalid_metering_point_format"),
+            ("707057500080190000", "metering_point_out_of_range"),
+        )
+        entry = SimpleNamespace(data={CONF_API_KEY: "key"})
+        hass = SimpleNamespace(
+            config_entries=SimpleNamespace(
+                async_entries=lambda _: [],
+                async_get_known_entry=lambda _: entry,
+            )
+        )
+        for flow_type in (GlitrenettConfigFlow, GlitrenettMeteringPointFlow):
+            for point_id, expected in cases:
+                with self.subTest(flow=flow_type.__name__, point_id=point_id):
+                    flow = flow_type()
+                    flow.hass = hass
+                    flow.context = {"source": "user"}
+                    if isinstance(flow, GlitrenettConfigFlow):
+                        await flow.async_step_user({CONF_API_KEY: "key"})
+                        step = flow.async_step_metering_point
+                    else:
+                        flow.handler = ("entry", "metering_point")
+                        step = flow.async_step_user
+                    with patch(
+                        "custom_components.glitrenett.config_flow.async_get_tariffs",
+                        new=AsyncMock(),
+                    ) as fetch:
+                        result = await step(
+                            {"name": "House", "metering_point_id": point_id}
+                        )
+                    self.assertEqual(
+                        result["errors"], {"metering_point_id": expected}
+                    )
+                    fetch.assert_not_awaited()
+
+
 class FlowTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.entries = []
@@ -270,7 +344,7 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
             new=AsyncMock(return_value={}),
         ):
             result = await flow.async_step_metering_point(
-                {"name": "Missing", "metering_point_id": "missing"}
+                {"name": "Missing", "metering_point_id": "707057500076190000"}
             )
         self.assertEqual(result["errors"]["base"], "point_not_found")
 
@@ -318,7 +392,7 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
             new=AsyncMock(side_effect=APIError(401)),
         ):
             result = await flow.async_step_metering_point(
-                {"name": "House", "metering_point_id": "one"}
+                {"name": "House", "metering_point_id": "707057500076190000"}
             )
         self.assertEqual(result["errors"]["base"], "invalid_auth")
 
