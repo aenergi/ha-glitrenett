@@ -1,13 +1,19 @@
 """Tests for multiple Glitrenett metering points."""
 
 import asyncio
+import json
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.const import CONF_API_KEY
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.loader import Integration, async_setup
 
 from custom_components.glitrenett import _async_reload_entry
 from custom_components.glitrenett.config_flow import (
@@ -282,6 +288,47 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
         self.hass = SimpleNamespace(
             config_entries=SimpleNamespace(async_entries=lambda _: self.entries)
         )
+
+    async def test_localized_api_key_help_on_initial_form_and_retry(self):
+        integration_path = (
+            Path(__file__).resolve().parents[1] / "custom_components" / "glitrenett"
+        )
+        manifest = json.loads((integration_path / "manifest.json").read_text())
+        with TemporaryDirectory() as config_dir:
+            hass = HomeAssistant(config_dir)
+            async_setup(hass)
+            integration = Integration(
+                hass,
+                "custom_components.glitrenett",
+                integration_path,
+                manifest,
+                {path.name for path in integration_path.iterdir()},
+            )
+            try:
+                with patch(
+                    "homeassistant.helpers.translation.async_get_integrations",
+                    new=AsyncMock(return_value={"glitrenett": integration}),
+                ):
+                    for language in ("en", "nb"):
+                        translations = await async_get_translations(
+                            hass, language, "config", {"glitrenett"}
+                        )
+                        flow = GlitrenettConfigFlow()
+                        flow.hass = hass
+                        flow.context = {"source": "user"}
+                        for user_input in (None, {CONF_API_KEY: " "}):
+                            with self.subTest(language=language, user_input=user_input):
+                                result = await flow.async_step_user(user_input)
+                                description = translations[
+                                    "component.glitrenett.config.step.user.description"
+                                ].format(**result["description_placeholders"])
+                                self.assertRegex(
+                                    description,
+                                    r"\[[^\]]+\]\(https://www\.glitrenett\.no/"
+                                    r"kunde/nettleie-og-priser/api-for-nettleiepriser\)",
+                                )
+            finally:
+                await hass.async_stop()
 
     async def test_initial_setup_multiple_points_and_duplicate(self):
         flow = GlitrenettConfigFlow()

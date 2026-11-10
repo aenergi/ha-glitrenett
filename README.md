@@ -37,6 +37,11 @@ points and refreshes each point no more often than once per hour.
 Existing installations from before multi-point support must remove and add the
 integration again. Their previous entity IDs and history are not migrated.
 
+The API-key step includes a link to Glitrenett's API-key application form.
+If the link is missing or the instructions still mention entering a metering
+point ID on that step, restart Home Assistant and clear your browser cache
+to refresh the integration's translations.
+
 The API key is sent to `https://api.aenergi.no/Glitrenett/gridtariff/api/1`
 using the `X-API-Key` header. The API provider recommends limiting requests to
 once per day; the integration's hourly interval is the maximum polling rate.
