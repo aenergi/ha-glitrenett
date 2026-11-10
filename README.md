@@ -1,3 +1,6 @@
+> **Notice:** This integration is maintained by Å Energi and the community
+> on non-company time. No official support from Glitrenett AS can be expected.
+
 # ha-glitrenett
 
 Custom Home Assistant integration for Glitrenett in Norway.
