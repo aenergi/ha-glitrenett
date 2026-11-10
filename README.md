@@ -1,5 +1,6 @@
-> **Notice:** This integration is maintained by Å Energi and the community
-> on non-company time. No official support from Glitrenett AS can be expected.
+> **Notice:** This integrations is maintained by homeassistant-enthusiasts
+> employed at Å Energi and the community on their own time. No official support
+> from Glitrenett AS can be expected. Pull requests are welcome.
 
 # ha-glitrenett
 
