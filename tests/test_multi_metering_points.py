@@ -289,7 +289,7 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
             config_entries=SimpleNamespace(async_entries=lambda _: self.entries)
         )
 
-    async def test_localized_api_key_help_on_initial_form_and_retry(self):
+    async def test_localized_setup_labels_and_help_links(self):
         integration_path = (
             Path(__file__).resolve().parents[1] / "custom_components" / "glitrenett"
         )
@@ -326,6 +326,35 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
                                     description,
                                     r"\[[^\]]+\]\(https://www\.glitrenett\.no/"
                                     r"kunde/nettleie-og-priser/api-for-nettleiepriser\)",
+                                )
+                        result = await flow.async_step_user({CONF_API_KEY: "key"})
+                        prefix = (
+                            "component.glitrenett.config.step."
+                            f"{result['step_id']}"
+                        )
+                        for field in result["data_schema"].schema:
+                            with self.subTest(language=language, field=field.schema):
+                                label = translations[f"{prefix}.data.{field.schema}"]
+                                self.assertTrue(label)
+                                self.assertNotEqual(label, field.schema)
+                        subentry_translations = await async_get_translations(
+                            hass, language, "config_subentries", {"glitrenett"}
+                        )
+                        for resources, step_prefix in (
+                            (translations, prefix),
+                            (
+                                subentry_translations,
+                                "component.glitrenett.config_subentries."
+                                "metering_point.step.user",
+                            ),
+                        ):
+                            with self.subTest(language=language, step=step_prefix):
+                                self.assertRegex(
+                                    resources[
+                                        f"{step_prefix}.data_description."
+                                        "metering_point_id"
+                                    ],
+                                    r"\[[^\]]+\]\(https://minside\.glitrenett\.no\)",
                                 )
             finally:
                 await hass.async_stop()
