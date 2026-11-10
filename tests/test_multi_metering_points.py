@@ -340,12 +340,18 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
                         subentry_translations = await async_get_translations(
                             hass, language, "config_subentries", {"glitrenett"}
                         )
-                        for resources, step_prefix in (
-                            (translations, prefix),
+                        subentry_flow = GlitrenettMeteringPointFlow()
+                        subentry_flow.hass = hass
+                        subentry_flow.handler = ("entry", "metering_point")
+                        subentry_flow.context = {"source": "user"}
+                        subentry_result = await subentry_flow.async_step_user()
+                        for resources, step_prefix, form in (
+                            (translations, prefix, result),
                             (
                                 subentry_translations,
                                 "component.glitrenett.config_subentries."
                                 "metering_point.step.user",
+                                subentry_result,
                             ),
                         ):
                             with self.subTest(language=language, step=step_prefix):
@@ -353,7 +359,7 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
                                     resources[
                                         f"{step_prefix}.data_description."
                                         "metering_point_id"
-                                    ],
+                                    ].format(**form["description_placeholders"]),
                                     r"\[[^\]]+\]\(https://minside\.glitrenett\.no\)",
                                 )
             finally:
@@ -365,6 +371,7 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
         flow.context = {"source": "user"}
         step = await flow.async_step_user({CONF_API_KEY: " key "})
         self.assertEqual(step["step_id"], "metering_point")
+        help_placeholders = step["description_placeholders"]
         with patch(
             "custom_components.glitrenett.config_flow._validate_point",
             new=AsyncMock(return_value=None),
@@ -373,10 +380,12 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
                 {"name": "House", "metering_point_id": "one", "add_another": True}
             )
             self.assertEqual(step["type"], FlowResultType.FORM)
+            self.assertEqual(step["description_placeholders"], help_placeholders)
             step = await flow.async_step_metering_point(
                 {"name": "Again", "metering_point_id": "one", "add_another": False}
             )
             self.assertEqual(step["errors"]["base"], "already_configured")
+            self.assertEqual(step["description_placeholders"], help_placeholders)
             result = await flow.async_step_metering_point(
                 {"name": "Cabin", "metering_point_id": "two", "add_another": False}
             )

@@ -17,7 +17,7 @@
           "add_another": "Legg til et målepunkt til"
         },
         "data_description": {
-          "metering_point_id": "Du finner målepunkt-ID-ene dine på [Min side](https://minside.glitrenett.no)."
+          "metering_point_id": "Du finner målepunkt-ID-ene dine på [Min side]({metering_point_url})."
         }
       },
       "reauth_confirm": {
@@ -58,7 +58,7 @@
             "metering_point_id": "Målepunkt-ID"
           },
           "data_description": {
-            "metering_point_id": "Du finner målepunkt-ID-ene dine på [Min side](https://minside.glitrenett.no)."
+            "metering_point_id": "Du finner målepunkt-ID-ene dine på [Min side]({metering_point_url})."
           }
         }
       },

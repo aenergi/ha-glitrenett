@@ -18,6 +18,7 @@ from .const import (
 from .coordinator import APIError, RequestThrottled, async_get_tariffs
 
 API_KEY_URL = "https://www.glitrenett.no/kunde/nettleie-og-priser/api-for-nettleiepriser"
+METERING_POINT_URL = "https://minside.glitrenett.no"
 CONF_ADD_ANOTHER = "add_another"
 
 
@@ -134,6 +135,9 @@ class GlitrenettConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     return self.async_show_form(
                         step_id="metering_point",
                         data_schema=_point_schema(add_another=True),
+                        description_placeholders={
+                            "metering_point_url": METERING_POINT_URL
+                        },
                     )
                 return self.async_create_entry(
                     title="Glitrenett",
@@ -144,6 +148,7 @@ class GlitrenettConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="metering_point",
             data_schema=_point_schema(add_another=True),
             errors=errors,
+            description_placeholders={"metering_point_url": METERING_POINT_URL},
         )
 
     async def async_step_reauth(self, _: dict[str, str] | None = None) -> FlowResult:
@@ -217,5 +222,8 @@ class GlitrenettMeteringPointFlow(config_entries.ConfigSubentryFlow):
                     unique_id=point_id,
                 )
         return self.async_show_form(
-            step_id="user", data_schema=_point_schema(), errors=errors
+            step_id="user",
+            data_schema=_point_schema(),
+            errors=errors,
+            description_placeholders={"metering_point_url": METERING_POINT_URL},
         )

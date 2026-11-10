@@ -17,7 +17,7 @@
           "add_another": "Add another metering point"
         },
         "data_description": {
-          "metering_point_id": "You can find your metering point IDs at [My page](https://minside.glitrenett.no)."
+          "metering_point_id": "You can find your metering point IDs at [My page]({metering_point_url})."
         }
       },
       "reauth_confirm": {
@@ -58,7 +58,7 @@
             "metering_point_id": "Metering point ID"
           },
           "data_description": {
-            "metering_point_id": "You can find your metering point IDs at [My page](https://minside.glitrenett.no)."
+            "metering_point_id": "You can find your metering point IDs at [My page]({metering_point_url})."
           }
         }
       },
