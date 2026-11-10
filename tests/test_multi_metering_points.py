@@ -1,13 +1,19 @@
 """Tests for multiple Glitrenett metering points."""
 
 import asyncio
+import json
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.const import CONF_API_KEY
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.loader import Integration, async_setup
 
 from custom_components.glitrenett import _async_reload_entry
 from custom_components.glitrenett.config_flow import (
@@ -283,12 +289,89 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
             config_entries=SimpleNamespace(async_entries=lambda _: self.entries)
         )
 
+    async def test_localized_setup_labels_and_help_links(self):
+        integration_path = (
+            Path(__file__).resolve().parents[1] / "custom_components" / "glitrenett"
+        )
+        manifest = json.loads((integration_path / "manifest.json").read_text())
+        with TemporaryDirectory() as config_dir:
+            hass = HomeAssistant(config_dir)
+            async_setup(hass)
+            integration = Integration(
+                hass,
+                "custom_components.glitrenett",
+                integration_path,
+                manifest,
+                {path.name for path in integration_path.iterdir()},
+            )
+            try:
+                with patch(
+                    "homeassistant.helpers.translation.async_get_integrations",
+                    new=AsyncMock(return_value={"glitrenett": integration}),
+                ):
+                    for language in ("en", "nb"):
+                        translations = await async_get_translations(
+                            hass, language, "config", {"glitrenett"}
+                        )
+                        flow = GlitrenettConfigFlow()
+                        flow.hass = hass
+                        flow.context = {"source": "user"}
+                        for user_input in (None, {CONF_API_KEY: " "}):
+                            with self.subTest(language=language, user_input=user_input):
+                                result = await flow.async_step_user(user_input)
+                                description = translations[
+                                    "component.glitrenett.config.step.user.description"
+                                ].format(**result["description_placeholders"])
+                                self.assertRegex(
+                                    description,
+                                    r"\[[^\]]+\]\(https://www\.glitrenett\.no/"
+                                    r"kunde/nettleie-og-priser/api-for-nettleiepriser\)",
+                                )
+                        result = await flow.async_step_user({CONF_API_KEY: "key"})
+                        prefix = (
+                            "component.glitrenett.config.step."
+                            f"{result['step_id']}"
+                        )
+                        for field in result["data_schema"].schema:
+                            with self.subTest(language=language, field=field.schema):
+                                label = translations[f"{prefix}.data.{field.schema}"]
+                                self.assertTrue(label)
+                                self.assertNotEqual(label, field.schema)
+                        subentry_translations = await async_get_translations(
+                            hass, language, "config_subentries", {"glitrenett"}
+                        )
+                        subentry_flow = GlitrenettMeteringPointFlow()
+                        subentry_flow.hass = hass
+                        subentry_flow.handler = ("entry", "metering_point")
+                        subentry_flow.context = {"source": "user"}
+                        subentry_result = await subentry_flow.async_step_user()
+                        for resources, step_prefix, form in (
+                            (translations, prefix, result),
+                            (
+                                subentry_translations,
+                                "component.glitrenett.config_subentries."
+                                "metering_point.step.user",
+                                subentry_result,
+                            ),
+                        ):
+                            with self.subTest(language=language, step=step_prefix):
+                                self.assertRegex(
+                                    resources[
+                                        f"{step_prefix}.data_description."
+                                        "metering_point_id"
+                                    ].format(**form["description_placeholders"]),
+                                    r"\[[^\]]+\]\(https://minside\.glitrenett\.no\)",
+                                )
+            finally:
+                await hass.async_stop()
+
     async def test_initial_setup_multiple_points_and_duplicate(self):
         flow = GlitrenettConfigFlow()
         flow.hass = self.hass
         flow.context = {"source": "user"}
         step = await flow.async_step_user({CONF_API_KEY: " key "})
         self.assertEqual(step["step_id"], "metering_point")
+        help_placeholders = step["description_placeholders"]
         with patch(
             "custom_components.glitrenett.config_flow._validate_point",
             new=AsyncMock(return_value=None),
@@ -297,10 +380,12 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
                 {"name": "House", "metering_point_id": "one", "add_another": True}
             )
             self.assertEqual(step["type"], FlowResultType.FORM)
+            self.assertEqual(step["description_placeholders"], help_placeholders)
             step = await flow.async_step_metering_point(
                 {"name": "Again", "metering_point_id": "one", "add_another": False}
             )
             self.assertEqual(step["errors"]["base"], "already_configured")
+            self.assertEqual(step["description_placeholders"], help_placeholders)
             result = await flow.async_step_metering_point(
                 {"name": "Cabin", "metering_point_id": "two", "add_another": False}
             )
